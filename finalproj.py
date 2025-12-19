@@ -7,6 +7,7 @@ import os
 # GLOBAL FONT (Roboto)
 # ---------------------------
 FONT_FAMILY = "Roboto, Segoe UI, Arial, sans-serif"
+CARD_LIGHT_BLUE = "#DAE5F9" 
 
 # Plotly defaults
 px.defaults.template = "plotly_white"
@@ -31,7 +32,7 @@ df_TimeSeries = df_TimeSeries.merge(
     how="left"
 )
 
-app = Dash(__name__)  # assets folder auto-loaded
+app = Dash(__name__) 
 server = app.server
 
 # ---------------------------
@@ -49,7 +50,7 @@ kpi_turnover = f"Avg Inventory Turnover: {avg_turnover:.2f}"
 # ---------------------------
 PAGE_STYLE = {
     "backgroundColor": "#F3F6FA",
-    "fontFamily": FONT_FAMILY,     # ✅ Roboto here
+    "fontFamily": FONT_FAMILY,  
     "padding": "18px 22px"
 }
 
@@ -64,7 +65,7 @@ CARD_STYLE = {
 CHART_HEADER_STYLE = {
     "backgroundColor": "#0053E2",  # Walmart blue
     "color": "white",
-    "fontFamily": FONT_FAMILY,     # ✅ Roboto here
+    "fontFamily": FONT_FAMILY,  
     "fontWeight": "800",
     "fontSize": "16px",
     "padding": "8px 14px",
@@ -143,7 +144,7 @@ app.layout = html.Div([
             html.Div(
                 "Walmart LA Inventory & Sales Performance Dashboard",
                 style={
-                    "fontFamily": FONT_FAMILY,   # ✅ Roboto here
+                    "fontFamily": FONT_FAMILY,
                     "fontSize": "28px",
                     "fontWeight": "800",
                     "color": "white",
@@ -239,8 +240,17 @@ app.layout = html.Div([
 
         # Line Chart
         html.Div([
-            html.Div("Inventory Turnover Trend (Monthly by Category)", style=CHART_HEADER_STYLE),
+            html.Div("Inventory Turnover Trend", style=CHART_HEADER_STYLE),
             html.Div([
+                dcc.Dropdown(
+                    id="turnover-y-selector",
+                    options=[
+                        {"label": "Product Name", "value": "ProductName"},
+                        {"label": "Category", "value": "Category"},
+                    ],
+                    value="ProductName",
+                    clearable=False
+                ),
                 dcc.Graph(id="line-chart", style={"height": "420px"})
             ], style=CHART_BODY_STYLE)
         ], style={"width": "48%"}),
@@ -306,25 +316,24 @@ def update_space_bar(y_metric):
         text="WarehouseSpaceOccupied",
     )
     fig.update_traces(
-        texttemplate='%{text:.3f}',  # ← limit to 2 decimals
+        texttemplate='%{text:.3f}',  #limit to 2 decimals
         textposition='outside',
         cliponaxis=False
     )
-    fig.update_yaxes(title_text="Product Name")
-    fig.update_xaxes(title_text="Warehouse Space Occupied")
+    fig.update_yaxes(title_text="Product Name", showgrid=False)
+    fig.update_xaxes(title_text="Warehouse Space Occupied", showgrid=False)
     fig.update_coloraxes(colorbar_title="Warehouse Space Occupied")
 
 
     fig.update_layout(margin=dict(l=60, r=20, t=40, b=80))
     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
-    fig.update_layout(plot_bgcolor="#8FB3F2")
-    fig.update_layout(paper_bgcolor="#DAE5F9")
+    fig.update_layout(plot_bgcolor=CARD_LIGHT_BLUE)
+    fig.update_layout(paper_bgcolor=CARD_LIGHT_BLUE)
 
     avg_space = df_grouped["WarehouseSpaceOccupied"].mean()
     fig.add_vline(x=avg_space, line_color="red", line_width=2)
-    fig.add_vrect(x0=0.05, x1=0.12, fillcolor="red", opacity=0.08, line_width=0)
 
-    fig = apply_roboto_font(fig)   # ✅ APPLY ROBOTO
+    fig = apply_roboto_font(fig) 
     return fig
 
 
@@ -333,27 +342,39 @@ def update_space_bar(y_metric):
 # ---------------------------
 @app.callback(
     Output("line-chart", "figure"),
-    Input("space-y-selector", "value")  # dùng để trigger load
+    Input("turnover-y-selector", "value") 
 )
-def update_line(_):
+def update_line(y_metric):
     df_line = (
         df_TimeSeries
         .groupby(["Month", "Category"], as_index=False)["MonthlyTurnoverRate"]
         .mean()
     )
 
+    if y_metric == "ProductName":
+        df_line = df_TimeSeries.groupby(["Month", "ProductName"], as_index=False)["MonthlyTurnoverRate"].mean()
+        color_col = "ProductName"
+        line_title = "Inventory Turnover Trend (Monthly by Product)"
+    else:
+        df_line = df_TimeSeries.groupby(["Month", "Category"], as_index=False)["MonthlyTurnoverRate"].mean()
+        color_col = "Category"
+        line_title = "Inventory Turnover Trend"
+
     fig = px.line(
         df_line,
         x="Month",
         y="MonthlyTurnoverRate",
-        color="Category"
+        color=color_col,
+        title=line_title,
+        color_discrete_sequence=px.colors.qualitative.Alphabet
     )
 
     fig.update_layout(margin=dict(l=60, r=20, t=40, b=60))
+    fig.update_yaxes(title_text="Monthly Turnover Rate")
     fig.update_layout(plot_bgcolor="#C3D3EE")
     fig.update_layout(paper_bgcolor="#DAE5F9")
 
-    fig = apply_roboto_font(fig)   # ✅ APPLY ROBOTO
+    fig = apply_roboto_font(fig)  
     return fig
 
 
@@ -396,7 +417,7 @@ def update_revenue_bar(x_metric):
     fig.update_layout(yaxis_title='Total Revenue ($)', xaxis={'categoryorder': 'total ascending'})
     
 
-    fig = apply_roboto_font(fig)   # ✅ APPLY ROBOTO
+    fig = apply_roboto_font(fig)
     return fig
 
 
@@ -428,8 +449,14 @@ def update_heatmap(_):
 
     fig = px.imshow(
         heat_table,
-        labels=dict(x=" ", y="Store", color="Units Sold"),
         aspect="auto"
+    )
+
+    fig.update_traces(
+        hovertemplate=
+            "Product=%{x}<br>"
+            "Store=%{y}<br>" +
+            "Units Sold=%{z}<extra></extra>"
     )
 
     fig.update_layout(
@@ -440,7 +467,7 @@ def update_heatmap(_):
     fig.update_yaxes(automargin=True)
     fig.update_layout(paper_bgcolor="#DAE5F9")
 
-    fig = apply_roboto_font(fig)   # ✅ APPLY ROBOTO
+    fig = apply_roboto_font(fig) 
     return fig
 
 
